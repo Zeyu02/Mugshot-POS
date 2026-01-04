@@ -1,0 +1,26 @@
+{
+  "name": "mugshots-cafe-pos",
+  "version": "1.0.0",
+  "description": "MugShots Cafe Point of Sale System",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo Build complete",
+    "android": "npx cap open android"
+  },
+  "keywords": [
+    "pos",
+    "cafe",
+    "android"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@capacitor/cli": "^5.5.1"
+  },
+  "dependencies": {
+    "@capacitor/android": "^5.5.1",
+    "@capacitor/core": "^5.5.1",
+    "@capacitor/filesystem": "^5.2.2",
+    "cordova-plugin-bluetooth-serial": "^0.4.7"
+  }
+}

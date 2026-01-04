@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan to Access POS</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 500px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        .qr-container {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+            display: inline-block;
+        }
+        .qr-container img {
+            display: block;
+            width: 300px;
+            height: 300px;
+            border: 4px solid white;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .url-box {
+            background: #f8f9fa;
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            color: #667eea;
+            font-weight: bold;
+            word-break: break-all;
+        }
+        .instructions {
+            background: #e8f4f8;
+            border-left: 4px solid #17a2b8;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: left;
+            border-radius: 5px;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #17a2b8;
+        }
+        .instructions ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin: 8px 0;
+            color: #555;
+        }
+        .note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: left;
+            border-radius: 5px;
+        }
+        .note strong {
+            color: #856404;
+        }
+        .emoji {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s;
+        }
+        .refresh-btn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="emoji">📱</div>
+        <h1>MugShots Cafe POS</h1>
+        <p class="subtitle">Scan to access on your tablet</p>
+        
+        <div class="qr-container">
+            <img id="qrCode" src="" alt="QR Code">
+        </div>
+        
+        <div class="url-box" id="serverUrl">Loading...</div>
+        
+        <div class="instructions">
+            <h3>📋 How to Connect:</h3>
+            <ol>
+                <li><strong>Make sure</strong> your tablet is on the same Wi-Fi</li>
+                <li><strong>Scan</strong> the QR code with your tablet camera</li>
+                <li><strong>Open</strong> the link that appears</li>
+                <li><strong>Enjoy!</strong> Your POS will load instantly</li>
+            </ol>
+        </div>
+        
+        <div class="note">
+            <strong>⚡ Live Updates:</strong> Any changes you make on your PC will show on the tablet when you refresh!
+        </div>
+        
+        <button class="refresh-btn" onclick="location.reload()">🔄 Refresh IP Address</button>
+    </div>
+
+    <script>
+        // Get local IP and generate QR code
+        async function getLocalIP() {
+            try {
+                // Try to get IP from a connection test
+                const pc = new RTCPeerConnection({iceServers: []});
+                pc.createDataChannel('');
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                
+                return new Promise((resolve) => {
+                    pc.onicecandidate = (ice) => {
+                        if (!ice || !ice.candidate || !ice.candidate.candidate) {
+                            resolve(null);
+                            return;
+                        }
+                        
+                        const ipRegex = /([0-9]{1,3}(\.[0-9]{1,3}){3})/;
+                        const match = ipRegex.exec(ice.candidate.candidate);
+                        
+                        if (match) {
+                            pc.onicecandidate = () => {};
+                            pc.close();
+                            resolve(match[1]);
+                        }
+                    };
+                });
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function init() {
+            // Use the known IP from server
+            const ip = '192.168.100.156'; // Your IP
+            const port = '8080';
+            const url = `http://${ip}:${port}`;
+            
+            // Update URL display
+            document.getElementById('serverUrl').textContent = url;
+            
+            // Generate QR code using API
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
+            document.getElementById('qrCode').src = qrUrl;
+            
+            // Try to get actual IP dynamically
+            const detectedIP = await getLocalIP();
+            if (detectedIP && detectedIP !== '127.0.0.1') {
+                const newUrl = `http://${detectedIP}:${port}`;
+                document.getElementById('serverUrl').textContent = newUrl;
+                const newQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(newUrl)}`;
+                document.getElementById('qrCode').src = newQrUrl;
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

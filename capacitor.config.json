@@ -1,0 +1,18 @@
+{
+  "appId": "com.mugshots.cafe.pos",
+  "appName": "MugShots Cafe POS",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  },
+  "server": {
+    "androidScheme": "https"
+  },
+  "cordova": {
+    "preferences": {
+      "BluetoothEnabled": "true"
+    }
+  }
+}

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix Categories - MugShots POS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 600px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            font-size: 18px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 2px solid #bee5eb;
+        }
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 18px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+        .log {
+            text-align: left;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Fix Category Names</h1>
+        <div id="status" class="status info">
+            Ready to standardize category names
+        </div>
+        <button class="btn" onclick="fixCategories()">Fix Categories Now</button>
+        <div id="log" class="log" style="display: none;"></div>
+    </div>
+
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            logDiv.style.display = 'block';
+            logDiv.innerHTML += message + '<br>';
+            console.log(message);
+        }
+
+        function fixCategories() {
+            const statusDiv = document.getElementById('status');
+            document.getElementById('log').innerHTML = '';
+            
+            try {
+                log('🔍 Loading data from localStorage...');
+                
+                let categories = JSON.parse(localStorage.getItem('mugshotCategories') || '[]');
+                let products = JSON.parse(localStorage.getItem('mugshotProducts') || '[]');
+                
+                log(`Found ${products.length} products`);
+                log(`Found ${categories.length} categories`);
+                
+                // Standardize category names mapping
+                const categoryMapping = {
+                    "Flavored tea": "Flavored Tea",
+                    "FreshFruit Shake": "Fresh Fruit Shake",
+                    "Fruity Slush": "Fruit Slush",
+                    "Solo Meals": "Solo Meals",
+                    "SOLO MEALS": "Solo Meals",
+                    "MilkTea Series": "MilkTea Series",
+                    "Mugshots Pasta": "Mugshots Pasta",
+                    "Mugshot Rice Bowl": "Mugshot Rice Bowl",
+                    "Mugshot Silog": "Mugshot Silog",
+                    "Ala Carte": "Ala Carte",
+                    "Hot Coffee": "Hot Coffee",
+                    "Iced Coffee": "Iced Coffee",
+                    "Non-Coffee": "Non-Coffee",
+                    "Smoothie": "Smoothie",
+                    "Fruity Coolers": "Fruity Coolers",
+                    "Burger": "Burger",
+                    "Snacks": "Snacks",
+                    "Salads": "Salads",
+                    "Pizza": "Pizza",
+                    "Fruit Tea": "Fruit Tea",
+                    "Fruit Slush": "Fruit Slush",
+                    "Liter": "Liter"
+                };
+                
+                log('📝 Fixing product categories...');
+                let productsFixed = 0;
+                products.forEach(p => {
+                    const oldCategory = p.category;
+                    if (categoryMapping[p.category]) {
+                        p.category = categoryMapping[p.category];
+                        if (oldCategory !== p.category) {
+                            log(`  ✓ "${oldCategory}" → "${p.category}"`);
+                            productsFixed++;
+                        }
+                    }
+                });
+                
+                log('📝 Fixing category list...');
+                let categoriesFixed = 0;
+                categories.forEach(c => {
+                    const oldName = c.name;
+                    if (categoryMapping[c.name]) {
+                        c.name = categoryMapping[c.name];
+                        if (oldName !== c.name) {
+                            log(`  ✓ "${oldName}" → "${c.name}"`);
+                            categoriesFixed++;
+                        }
+                    }
+                });
+                
+                // Save back to localStorage
+                log('💾 Saving changes...');
+                localStorage.setItem('mugshotProducts', JSON.stringify(products));
+                localStorage.setItem('mugshotCategories', JSON.stringify(categories));
+                
+                log(`✅ Fixed ${productsFixed} product categories`);
+                log(`✅ Fixed ${categoriesFixed} category names`);
+                log('');
+                log('🎉 All done! Reload your POS app now.');
+                
+                statusDiv.className = 'status success';
+                statusDiv.innerHTML = `
+                    ✅ Categories Fixed!<br>
+                    <small>${productsFixed} products updated, ${categoriesFixed} categories renamed</small>
+                `;
+                
+                setTimeout(() => {
+                    if (confirm('Categories fixed! Would you like to reload the POS app now?')) {
+                        window.location.href = 'index.html';
+                    }
+                }, 1000);
+                
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '❌ Error fixing categories. Check console for details.';
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>

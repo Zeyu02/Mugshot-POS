@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MugShots Cafe POS</string>
+    <string name="title_activity_main">MugShots Cafe POS</string>
+    <string name="package_name">com.mugshots.cafe.pos</string>
+    <string name="custom_url_scheme">com.mugshots.cafe.pos</string>
+</resources>

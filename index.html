@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ff6b35">
+    <meta name="description" content="Point of Sale System for MugShots Cafe">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>MugShots Cafe - POS System</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/jpeg" href="img/mugshot.jpg">
+    <link rel="apple-touch-icon" href="img/mugshot.jpg">
+    <link rel="stylesheet" href="styles-v2.css">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <style>
+        /* DARK MODE FIX - ABSOLUTE OVERRIDE */
+        body.dark-mode * {
+            color: #000000 !important;
+        }
+        
+        body.dark-mode .section-subtitle,
+        body.dark-mode .stat-label,
+        body.dark-mode small {
+            color: #333333 !important;
+        }
+        
+        /* TABLET LANDSCAPE FIX - EDIT THESE VALUES */
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .categories-tabs {
+                padding: 12px 16px !important;
+                gap: 10px !important;
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+            
+            .category-tab {
+                padding: 8px 12px !important;      /* ← MATCHES JavaScript line 671 */
+                font-size: 12px !important;        /* ← MATCHES JavaScript line 672 */
+                font-weight: 500 !important;
+                min-width: fit-content !important;
+                flex-shrink: 0 !important;
+            }
+            
+            /* Add-ons modal tablet styling */
+            .addons-modal {
+                max-width: 500px !important;
+                max-height: 85vh !important;
+                overflow-y: auto !important;
+            }
+            
+            .addons-header h3 {
+                font-size: 18px !important;
+            }
+            
+            .addon-item-with-qty {
+                padding: 12px 0 !important;
+            }
+            
+            .addon-info {
+                gap: 8px !important;
+            }
+            
+            .addon-name {
+                font-size: 15px !important;
+            }
+            
+            .addon-price {
+                font-size: 15px !important;
+            }
+            
+            .addon-qty-controls {
+                gap: 10px !important;
+            }
+            
+            .qty-btn {
+                width: 40px !important;
+                height: 40px !important;
+                font-size: 20px !important;
+            }
+            
+            .addon-qty {
+                width: 70px !important;
+                height: 40px !important;
+                font-size: 16px !important;
+            }
+            
+            .addons-footer button {
+                padding: 12px 20px !important;
+                font-size: 15px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo-section">
+                <img src="img/mugshot.jpg" alt="MugShots Cafe" class="logo">
+                <h1>MugShots Cafe</h1>
+            </div>
+            <div class="header-actions">
+                <div class="date-time" id="dateTime"></div>
+                <div id="networkStatus" style="margin-right: 10px; font-size: 14px; font-weight: 500;"></div>
+                <button class="btn-notification-header" onclick="toggleNotifications()">
+                    <span class="notification-icon">🔔</span>
+                    <span class="notification-badge" id="notificationBadge">0</span>
+                </button>
+                <button class="btn-settings-header" onclick="toggleSettings()">⚙️</button>
+            </div>
+        </header>
+
+        <!-- Main POS Section -->
+        <div id="pos-section" class="main-section active">
+            <div class="pos-layout">
+                <!-- Left Sidebar -->
+                <div class="sidebar">
+                    <div class="sidebar-menu">
+                        <div class="menu-item active" onclick="showPOS()">
+                            <span class="menu-icon">🍽️</span>
+                            <span>Menu</span>
+                        </div>
+                        <div class="menu-item" onclick="showSection('dashboard')">
+                            <span class="menu-icon">📊</span>
+                            <span>Dashboard</span>
+                        </div>
+                        <div class="menu-item" onclick="showSection('products')">
+                            <span class="menu-icon">📦</span>
+                            <span>Products</span>
+                        </div>
+
+                        <div class="menu-item" onclick="showSection('sales')">
+                            <span class="menu-icon">📜</span>
+                            <span>History</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Center: Products -->
+                <div class="products-area">
+                    <div class="products-header">
+                        <div class="search-bar">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="searchProduct" placeholder="Search..." onkeyup="searchProducts()">
+                        </div>
+                        <button class="btn-order-history" onclick="showSection('sales')">📋 Orders</button>
+                    </div>
+
+                    <div class="categories-tabs" id="categoriesContainer">
+                        <!-- Categories will be dynamically loaded here -->
+                    </div>
+
+                    <div class="products-grid-new" id="productsGrid">
+                        <!-- Products will be dynamically loaded here -->
+                    </div>
+                </div>
+
+                <!-- Right: Cart -->
+                <div class="cart-area">
+                    <div class="cart-header">
+                        <h2>Cart</h2>
+                        <button class="btn-clear-cart" onclick="clearCart()">Clear All</button>
+                    </div>
+
+                    <div class="cart-tabs">
+                        <button class="cart-tab active">Dine In</button>
+                        <button class="cart-tab">Take Out</button>
+                        <button class="cart-tab">Delivery</button>
+                    </div>
+
+                    <div class="cart-items" id="cartItems">
+                        <p class="empty-cart">Cart is empty</p>
+                    </div>
+                    
+                    <div class="cart-footer">
+                        <div class="cart-total">
+                            <div class="total-row">
+                                <span>Sub total</span>
+                                <span id="subtotal">₱0.00</span>
+                            </div>
+                            <div class="total-row main-total">
+                                <span>Total</span>
+                                <span id="total">₱0.00</span>
+                            </div>
+                        </div>
+                        <button class="btn-checkout" onclick="processCheckout()">
+                            <span>Continue to Payment</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="dashboard-section" class="main-section">
+            <div class="section-back-btn">
+                <button class="btn-back-pos" onclick="showPOS()">← Back to Menu</button>
+            </div>
+            <div class="dashboard-header">
+                <h2>📊 Sales Dashboard & Analytics</h2>
+                <div class="dashboard-date-range">
+                    <select id="dashboardRange" onchange="updateDashboard()">
+                        <option value="today">Today</option>
+                        <option value="week" selected>This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                    </select>
+                    <button class="btn-clear-sales" onclick="clearAllSales()" style="margin-left: 12px; padding: 12px 20px; background: #e74c3c; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer;">🗑️ Clear All Sales</button>
+                </div>
+            </div>
+            
+            <div class="dashboard-grid">
+                <div class="stat-card revenue">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-content">
+                        <span class="stat-label">Total Revenue</span>
+                        <h3 class="stat-value" id="todaySales">₱0.00</h3>
+                        <span class="stat-change positive" id="revenueChange">+0% from last week</span>
+                    </div>
+                </div>
+                
+                <div class="stat-card orders">
+                    <div class="stat-icon">🛒</div>
+                    <div class="stat-content">
+                        <span class="stat-label">Total Orders</span>
+                        <h3 class="stat-value" id="todayOrders">0</h3>
+                        <span class="stat-change positive" id="ordersChange">+0% from last week</span>
+                    </div>
+                </div>
+                
+                <div class="stat-card avg">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-content">
+                        <span class="stat-label">Average Order</span>
+                        <h3 class="stat-value" id="avgOrder">₱0.00</h3>
+                        <span class="stat-change neutral" id="avgChange">Same as last week</span>
+                    </div>
+                </div>
+                
+                <div class="stat-card products">
+                    <div class="stat-icon">📦</div>
+                    <div class="stat-content">
+                        <span class="stat-label">Total Products</span>
+                        <h3 class="stat-value" id="totalProducts">0</h3>
+                        <span class="stat-change">Active in menu</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-charts">
+                <div class="chart-card">
+                    <h3>📈 Sales Overview</h3>
+                    <div class="chart-container">
+                        <canvas id="salesChart"></canvas>
+                        <div class="chart-bars" id="salesChartBars">
+                            <!-- Simple CSS chart bars -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3>🔥 Top Selling Categories</h3>
+                    <div class="category-stats" id="categoryStats">
+                        <!-- Category breakdown -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-tables">
+                <div class="dashboard-table-card">
+                    <h3>🏆 Top Selling Products</h3>
+                    <div class="top-items-table" id="topItems">
+                        <p class="no-data">No sales data yet</p>
+                    </div>
+                </div>
+
+                <div class="dashboard-table-card">
+                    <h3>📝 Recent Transactions</h3>
+                    <div class="recent-transactions-table" id="recentTransactions">
+                        <p class="no-data">No transactions yet</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-insights">
+                <div class="insight-card">
+                    <h4>💡 Business Insights</h4>
+                    <ul id="insightsList">
+                        <li>Your best selling hour is typically between 9 AM - 11 AM</li>
+                        <li>Hot Coffee generates 45% of total revenue</li>
+                        <li>Average customer spends ₱250 per visit</li>
+                    </ul>
+                </div>
+                <div class="insight-card">
+                    <h4>📌 Quick Actions</h4>
+                    <button class="quick-action-btn" onclick="showSection('products')">+ Add New Product</button>
+                    <button class="quick-action-btn" onclick="showSection('sales')">📜 View Full History</button>
+                    <button class="quick-action-btn" onclick="exportSalesReport()">📥 Export Report</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products Management Section -->
+        <div id="products-section" class="main-section">
+            <div class="section-back-btn">
+                <button class="btn-back-pos" onclick="showPOS()">← Back to Menu</button>
+            </div>
+            <div class="section-header">
+                <div>
+                    <h2>📦 Product Management</h2>
+                    <p class="section-subtitle">Manage your menu items, categories, and pricing</p>
+                </div>
+                <div class="section-header-actions">
+                    <input type="text" class="search-input" placeholder="Search products..." id="productSearchInput" onkeyup="searchProductsTable()">
+                    <select class="filter-select" id="categoryFilter" onchange="filterProductsTable()">
+                        <option value="all">All Categories</option>
+                    </select>
+                    <button class="btn-add-category" onclick="openCategoryModal()">+ Category</button>
+                    <button class="btn-add-product" onclick="openAddProductModal()">+ New Product</button>
+                </div>
+            </div>
+            <div class="products-stats">
+                <div class="product-stat">
+                    <span class="stat-icon">📦</span>
+                    <div>
+                        <span class="stat-number" id="totalProductsCount">0</span>
+                        <span class="stat-text">Total Products</span>
+                    </div>
+                </div>
+                <div class="product-stat">
+                    <span class="stat-icon">📁</span>
+                    <div>
+                        <span class="stat-number" id="categoriesCount">6</span>
+                        <span class="stat-text">Categories</span>
+                    </div>
+                </div>
+                <div class="product-stat">
+                    <span class="stat-icon">💰</span>
+                    <div>
+                        <span class="stat-number" id="avgPrice">₱0</span>
+                        <span class="stat-text">Avg Price</span>
+                    </div>
+                </div>
+                <div class="product-stat">
+                    <span class="stat-icon">🔥</span>
+                    <div>
+                        <span class="stat-number" id="topCategory">-</span>
+                        <span class="stat-text">Top Category</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="products-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th width="60">Image</th>
+                            <th>Product Name</th>
+                            <th>Category</th>
+                            <th>Price</th>
+                            <th width="80">Stock</th>
+                            <th width="100">Status</th>
+                            <th width="150">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productsTableBody">
+                        <!-- Products will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Sales History Section -->
+        <div id="sales-section" class="main-section">
+            <div class="section-back-btn">
+                <button class="btn-back-pos" onclick="showPOS()">← Back to Menu</button>
+            </div>
+            <div class="section-header">
+                <div>
+                    <h2>Sales History & Reports</h2>
+                    <p class="section-subtitle">Track all transactions and analyze sales performance</p>
+                </div>
+                <div class="section-header-actions">
+                    <button class="btn-export" onclick="exportSalesReport()">📥 Export CSV</button>
+                    <button class="btn-print" onclick="printSalesReport()">🖨️ Print Report</button>
+                </div>
+            </div>
+            
+            <div class="sales-summary-cards">
+                <div class="summary-card">
+                    <div class="summary-icon revenue-icon">💵</div>
+                    <div class="summary-content">
+                        <span class="summary-label">Total Revenue</span>
+                        <h3 class="summary-value" id="filterTotalSales">₱0.00</h3>
+                        <span class="summary-count" id="filterTotalOrders">0 orders</span>
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-icon avg-icon">📊</div>
+                    <div class="summary-content">
+                        <span class="summary-label">Average Order</span>
+                        <h3 class="summary-value" id="filterAvgOrder">₱0.00</h3>
+                        <span class="summary-count">Per transaction</span>
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-icon items-icon">🛍️</div>
+                    <div class="summary-content">
+                        <span class="summary-label">Items Sold</span>
+                        <h3 class="summary-value" id="filterTotalItems">0</h3>
+                        <span class="summary-count">Total units</span>
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-icon peak-icon">⏰</div>
+                    <div class="summary-content">
+                        <span class="summary-label">Peak Hour</span>
+                        <h3 class="summary-value" id="peakHour">N/A</h3>
+                        <span class="summary-count">Most sales</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sales-controls">
+                <div class="sales-filters">
+                    <button class="filter-btn active" onclick="filterSales('today')">Today</button>
+                    <button class="filter-btn" onclick="filterSales('week')">This Week</button>
+                    <button class="filter-btn" onclick="filterSales('month')">This Month</button>
+                    <button class="filter-btn" onclick="filterSales('all')">All Time</button>
+                </div>
+                
+                <div class="sales-search">
+                    <input type="text" placeholder="Search by order ID or item..." id="salesSearchInput" onkeyup="searchSalesTable()">
+                    <input type="date" id="startDate" onchange="filterSalesByDate()">
+                    <input type="date" id="endDate" onchange="filterSalesByDate()">
+                </div>
+            </div>
+
+            <div class="sales-table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th width="120">Order ID</th>
+                            <th width="180">Date & Time</th>
+                            <th>Items</th>
+                            <th width="100">Quantity</th>
+                            <th width="120">Total</th>
+                            <th width="100">Payment</th>
+                            <th width="150">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="salesTableBody">
+                        <!-- Sales will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Product Modal -->
+    <div id="productModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeProductModal()">&times;</span>
+            <h2 id="modalTitle">Add New Product</h2>
+            
+            <form id="productForm" onsubmit="saveProduct(event)">
+                <div class="form-group">
+                    <label>Product Image:</label>
+                    <input type="file" id="productImage" accept="image/*" onchange="previewImage(event)">
+                    <div class="image-preview" id="imagePreview"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Product Name:</label>
+                    <input type="text" id="productName" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Category:</label>
+                    <input type="text" id="productCategory" list="categoryDatalist" placeholder="Type or select category" required>
+                    <datalist id="categoryDatalist">
+                        <!-- Categories will be dynamically populated -->
+                    </datalist>
+                </div>
+
+                <div class="form-group">
+                    <label>Price (₱):</label>
+                    <input type="number" id="productPrice" step="0.01" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Description (Optional):</label>
+                    <textarea id="productDescription" rows="3"></textarea>
+                </div>
+
+                <div class="form-group" style="display: flex; gap: 30px; padding: 16px; background: var(--bg-main); border-radius: 8px;">
+                    <div style="flex: 1;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="productActive" checked style="width: 20px; height: 20px; cursor: pointer;">
+                            <span style="font-weight: 600;">✓ Product Active</span>
+                        </label>
+                        <small style="color: var(--text-secondary); margin-left: 30px; display: block; margin-top: 4px;">
+                            Active products appear in POS menu
+                        </small>
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="productInStock" checked style="width: 20px; height: 20px; cursor: pointer;">
+                            <span style="font-weight: 600;">📦 In Stock</span>
+                        </label>
+                        <small style="color: var(--text-secondary); margin-left: 30px; display: block; margin-top: 4px;">
+                            In-stock products are available for sale
+                        </small>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeProductModal()">Cancel</button>
+                    <button type="submit" class="btn-save">Save Product</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Receipt Modal -->
+    <div id="receiptModal" class="modal">
+        <div class="modal-content receipt-modal">
+            <span class="close" onclick="closeReceiptModal()">&times;</span>
+            <div id="receiptContent">
+                <!-- Receipt will be generated here -->
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="editLastOrder()" title="Edit this order">
+                    ✏️ Edit Order
+                </button>
+                <button class="btn-print" onclick="printReceipt()" title="Print to thermal receipt printer">
+                     🖨️ Print to Thermal Printer
+                </button>
+                <button class="btn-new-order" onclick="newOrder()">✨ New Order</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Modal -->
+    <div id="categoryModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeCategoryModal()">&times;</span>
+            <h2>Manage Categories</h2>
+            
+            <div class="category-management">
+                <div class="add-category-form">
+                    <h3>Add New Category</h3>
+                    <form onsubmit="addNewCategory(event)">
+                        <div class="form-group">
+                            <label>Category Name:</label>
+                            <input type="text" id="newCategoryName" required placeholder="e.g., Desserts, Drinks, Meals">
+                        </div>
+                        <button type="submit" class="btn-save">Add Category</button>
+                    </form>
+                </div>
+
+                <div class="existing-categories">
+                    <h3>Existing Categories</h3>
+                    <div id="existingCategoryList" class="category-list">
+                        <!-- Categories will be listed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content settings-modal">
+            <span class="close" onclick="toggleSettings()">&times;</span>
+            <h2>⚙️ Settings</h2>
+            
+            <div class="settings-section">
+                <div class="setting-item">
+                    <div class="setting-info">
+                        <h3>🌙 Dark Mode</h3>
+                        <p>Switch between light and dark theme</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div class="setting-info">
+                        <h3>🔔 Notifications</h3>
+                        <p>Show notifications when items are added</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-info">
+                        <h3>💾 Backup & Restore</h3>
+                        <p>Export or import all your data (products, sales, settings)</p>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-primary" onclick="exportBackup()" style="padding: 8px 16px;">📥 Backup Data</button>
+                        <button class="btn-secondary" onclick="document.getElementById('importBackupFile').click()" style="padding: 8px 16px;">📤 Restore Data</button>
+                        <input type="file" id="importBackupFile" accept=".json" style="display: none;" onchange="importBackup(event)">
+                    </div>
+                </div>
+                
+                <div class="setting-item">
+                    <div class="setting-info">
+                        <h3>🖨️ Thermal Printer (PT-210)</h3>
+                        <p id="printerStatus">Auto-prints receipts after each transaction</p>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-primary" onclick="connectThermalPrinter()" style="padding: 8px 16px;">📡 Connect</button>
+                        <button class="btn-secondary" onclick="testPrint()" style="padding: 8px 16px;">🧪 Test Print</button>
+                        <button class="btn-secondary" onclick="disconnectThermalPrinter()" style="padding: 8px 16px;">🔌 Disconnect</button>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Method Modal -->
+    <div id="paymentModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closePaymentModal()">&times;</span>
+            <h2>💳 Select Payment Method</h2>
+            
+            <div class="order-type-reminder">
+                <p><strong>Order Type:</strong> <span id="selectedOrderType">Dine In</span></p>
+            </div>
+            
+            <div class="payment-methods">
+                <div class="payment-option" onclick="selectPayment('cash')">
+                    <div class="payment-icon">💵</div>
+                    <h3>Cash</h3>
+                    <p>Pay with cash</p>
+                </div>
+                <div class="payment-option" onclick="selectPayment('gcash')">
+                    <div class="payment-icon">📱</div>
+                    <h3>GCash</h3>
+                    <p>Pay via GCash</p>
+                </div>
+            </div>
+            
+            <div class="order-summary">
+                <h3>Order Summary</h3>
+                <div class="summary-row">
+                    <span>Subtotal:</span>
+                    <span id="paymentSubtotal">₱0.00</span>
+                </div>
+                <div class="summary-row total">
+                    <span>Total:</span>
+                    <span id="paymentTotal">₱0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Confirmation Modal -->
+    <div id="confirmPaymentModal" class="modal">
+        <div class="modal-content confirm-modal">
+            <div class="confirm-header">
+                <div class="confirm-icon">💳</div>
+                <h2>Confirm Payment</h2>
+            </div>
+            <div class="confirm-body">
+                <div class="payment-details">
+                    <div class="detail-row">
+                        <span class="detail-label">Payment Method:</span>
+                        <span class="detail-value" id="confirmMethod">Cash</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Order Type:</span>
+                        <span class="detail-value" id="confirmOrderType">Dine In</span>
+                    </div>
+                    <div class="detail-row total-row">
+                        <span class="detail-label">Total Amount:</span>
+                        <span class="detail-value" id="confirmTotal">₱0.00</span>
+                    </div>
+                </div>
+                <div class="confirm-message">
+                    <p>Are you sure you want to proceed with this payment?</p>
+                </div>
+            </div>
+            <div class="confirm-actions">
+                <button class="btn-cancel" onclick="cancelConfirmPayment()">Cancel</button>
+                <button class="btn-confirm" onclick="confirmPaymentAction()">Confirm Payment</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="storage.js"></script>
+    <script src="products-data.js"></script>
+    <script src="script.js"></script>
+    <script src="products.js"></script>
+    <script>
+        // FORCE DARK MODE TEXT COLORS TO BLACK
+        function applyDarkModeColors() {
+            if (document.body.classList.contains('dark-mode')) {
+                document.querySelectorAll('h1, h2, h3, h4, .stat-value, .dashboard-header h2, .section-header h2').forEach(el => {
+                    el.style.setProperty('color', '#000000', 'important');
+                });
+                document.querySelectorAll('.section-subtitle, .stat-label, p').forEach(el => {
+                    el.style.setProperty('color', '#333333', 'important');
+                });
+            }
+        }
+        
+        // Apply immediately and on any changes
+        setInterval(applyDarkModeColors, 500);
+        
+        // Override the toggleDarkMode function
+        const originalToggle = window.toggleDarkMode;
+        window.toggleDarkMode = function() {
+            if (originalToggle) originalToggle();
+            setTimeout(applyDarkModeColors, 100);
+        };
+        
+        // FORCE TABLET STYLES - EDIT THE VALUES BELOW
+        (function() {
+            function applyTabletStyles() {
+                const categoryTabs = document.querySelectorAll('.category-tab');
+                categoryTabs.forEach(tab => {
+                    tab.style.setProperty('padding', '12px 20px', 'important');  // ← EDIT HERE
+                    tab.style.setProperty('font-size', '13px', 'important');      // ← EDIT HERE
+                    tab.style.setProperty('font-weight', '1000', 'important');
+                    tab.style.setProperty('min-width', 'fit-content', 'important');
+                    tab.style.setProperty('flex-shrink', '0', 'important');
+                });
+            }
+            
+            // Apply immediately
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', applyTabletStyles);
+            } else {
+                applyTabletStyles();
+            }
+            
+            // Keep applying every 500ms to catch dynamically loaded content
+            setInterval(applyTabletStyles, 500);
+        })();
+    </script>
+</body>
+</html>
