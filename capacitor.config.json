@@ -7,9 +7,6 @@
     "captureInput": true,
     "webContentsDebuggingEnabled": true
   },
-  "server": {
-    "androidScheme": "https"
-  },
   "cordova": {
     "preferences": {
       "BluetoothEnabled": "true"

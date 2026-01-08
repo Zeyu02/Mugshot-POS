@@ -568,6 +568,21 @@ function showNotificationModal() {
         const payment = n.message.match(/₱([\d.]+)/)?.[0] || '';
         const method = n.message.includes('Cash') ? 'Cash' : 'GCash';
         
+        // Determine action type from message
+        let actionText = 'order completed!';
+        let actionIcon = '🍽️';
+        if (n.message.includes('deleted')) {
+            actionText = 'order deleted!';
+            actionIcon = '🗑️';
+        } else if (n.message.includes('edited')) {
+            actionText = 'order edited!';
+            actionIcon = '✏️';
+        } else if (orderType === 'Take Out') {
+            actionIcon = '🛍️';
+        } else if (orderType === 'Delivery') {
+            actionIcon = '🚚';
+        }
+        
         // Get Order ID and items from orderData if available
         const orderId = n.orderData ? n.orderData.id : 'N/A';
         const items = n.orderData && n.orderData.items ? n.orderData.items : [];
@@ -575,9 +590,9 @@ function showNotificationModal() {
         
         notifHTML += `
             <div class="notification-order-card">
-                <div class="notification-order-icon">${orderType === 'Dine In' ? '🍽️' : orderType === 'Take Out' ? '🛍️' : '🚚'}</div>
+                <div class="notification-order-icon">${actionIcon}</div>
                 <div class="notification-order-details">
-                    <div class="notification-order-type">${orderType} order completed!</div>
+                    <div class="notification-order-type">${orderType} ${actionText}</div>
                     <div class="notification-order-id" style="font-size: 12px; color: #6c757d; margin: 4px 0;">📋 Order ${orderId}</div>
                     <div class="notification-items" style="font-size: 11px; color: #888; margin: 4px 0; line-height: 1.4;">📦 ${itemsList}</div>
                     <div class="notification-order-meta">
@@ -1702,7 +1717,7 @@ function confirmPaymentAction() {
     const total = subtotal;
     
     const sale = {
-        id: generateDailyOrderId(),
+        id: editingOrderId || generateDailyOrderId(),  // Use existing ID if editing, otherwise generate new
         date: new Date().toISOString(),
         items: [...cart],
         total: total,
@@ -1728,8 +1743,27 @@ function confirmPaymentAction() {
         }
         return itemText;
     }).join(', ');
-    const notifMessage = `🎉 ${orderType} order completed! Order ${sale.id} - ${itemsList} - ${pendingPaymentMethod} payment - ₱${total.toFixed(2)}`;
-    addNotification(notifMessage, sale);
+    
+    // Check if we're editing an existing order or creating a new one
+    if (editingOrderId) {
+        // Update existing notification instead of creating a new one
+        const notificationIndex = notifications.findIndex(n => n.orderData && (n.orderData.id === editingOrderId || n.orderData.id === parseInt(editingOrderId)));
+        if (notificationIndex !== -1) {
+            const notifMessage = `✏️ Order ${sale.id} edited! ${orderType} - ${itemsList} - ${pendingPaymentMethod} - ₱${total.toFixed(2)}`;
+            notifications[notificationIndex].message = notifMessage;
+            notifications[notificationIndex].orderData = { ...sale };
+            notifications[notificationIndex].timestamp = new Date().toISOString();
+            saveNotifications();
+        } else {
+            // Notification doesn't exist, create one with edit flag
+            const notifMessage = `✏️ Order ${sale.id} edited! ${orderType} - ${itemsList} - ${pendingPaymentMethod} - ₱${total.toFixed(2)}`;
+            addNotification(notifMessage, sale);
+        }
+    } else {
+        // New order - create notification with completion message
+        const notifMessage = `🎉 ${orderType} order completed! Order ${sale.id} - ${itemsList} - ${pendingPaymentMethod} payment - ₱${total.toFixed(2)}`;
+        addNotification(notifMessage, sale);
+    }
     
     showReceipt(sale);
     cart = [];
@@ -1738,6 +1772,7 @@ function confirmPaymentAction() {
     
     showNotification(`🎉 Order ${sale.id} completed! Payment via ${pendingPaymentMethod}`);
     pendingPaymentMethod = null;
+    editingOrderId = null;  // Reset editing flag after order is complete
 }
 
 async function printReceiptThermal(sale) {
@@ -1836,12 +1871,21 @@ function testPrint() {
     );
 }
 
-function showReceipt(sale) {
+function showReceipt(sale, isViewingHistory = false) {
     console.log('showReceipt called with sale:', sale);
     console.log('Payment method in sale:', sale.paymentMethod);
     
+    // Store the sale being viewed for printing
+    currentViewedSale = sale;
+    
     const modal = document.getElementById('receiptModal');
     const receiptContent = document.getElementById('receiptContent');
+    
+    // Hide/show buttons based on whether viewing from history
+    const editBtn = modal.querySelector('.btn-secondary');
+    const newOrderBtn = modal.querySelector('.btn-new-order');
+    if (editBtn) editBtn.style.display = isViewingHistory ? 'none' : 'inline-block';
+    if (newOrderBtn) newOrderBtn.style.display = isViewingHistory ? 'none' : 'inline-block';
     
     const date = new Date(sale.date);
     
@@ -1937,23 +1981,34 @@ function showReceipt(sale) {
 
 function closeReceiptModal() {
     document.getElementById('receiptModal').style.display = 'none';
+    currentViewedSale = null; // Clear when closing
 }
 
 // Manual print button - prints to thermal printer
+// Track currently viewed sale for printing from history
+let currentViewedSale = null;
+
 function printReceipt() {
-    if (lastSale) {
-        printReceiptThermal(lastSale);
+    const saleToPrint = currentViewedSale || lastSale;
+    if (saleToPrint) {
+        printReceiptThermal(saleToPrint);
         showNotification('🖨️ Sending to printer...', 'info');
     } else {
         showNotification('⚠️ No receipt to print', 'warning');
     }
 }
 
+// Track if we're editing an existing order
+let editingOrderId = null;
+
 function editLastOrder() {
     if (!lastSale) {
         showNotification('⚠️ No order to edit', 'warning');
         return;
     }
+    
+    // Store the order ID we're editing
+    editingOrderId = lastSale.id;
     
     // Remove the sale from history since we're editing it
     const saleIndex = sales.findIndex(s => s.id === lastSale.id);
@@ -2206,7 +2261,7 @@ function filterSales(filter) {
 function viewSaleDetails(saleId) {
     const sale = sales.find(s => s.id === saleId || s.id === parseInt(saleId));
     if (sale) {
-        showReceipt(sale);
+        showReceipt(sale, true); // Pass true to indicate viewing from history
     }
 }
 
@@ -2231,7 +2286,11 @@ function editSale(saleId) {
                         </div>
                         <div class="info-row">
                             <span class="info-label">🏷️ Order Type:</span>
-                            <span class="info-value">${sale.orderType || 'Dine In'}</span>
+                            <select class="payment-method-select" id="editOrderType" onchange="updateEditOrderType('${saleId}', this.value)">
+                                <option value="Dine In" ${(sale.orderType || 'Dine In') === 'Dine In' ? 'selected' : ''}>Dine In</option>
+                                <option value="Take Out" ${sale.orderType === 'Take Out' ? 'selected' : ''}>Take Out</option>
+                                <option value="Delivery" ${sale.orderType === 'Delivery' ? 'selected' : ''}>Delivery</option>
+                            </select>
                         </div>
                         <div class="info-row">
                             <span class="info-label">💳 Payment Method:</span>
@@ -2306,6 +2365,15 @@ function updateEditPaymentMethod(saleId, newMethod) {
     
     sale.paymentMethod = newMethod;
     showNotification(`💳 Payment method changed to ${newMethod}`);
+}
+
+// Update order type in edit modal
+function updateEditOrderType(saleId, newType) {
+    const sale = sales.find(s => s.id === saleId || s.id === parseInt(saleId));
+    if (!sale) return;
+    
+    sale.orderType = newType;
+    showNotification(`🏷️ Order type changed to ${newType}`);
 }
 
 // Search products for adding to order
@@ -2441,6 +2509,12 @@ function saveEditedSale(saleId) {
     const sale = sales.find(s => s.id === saleId || s.id === parseInt(saleId));
     if (!sale) return;
     
+    // Get order type from selector
+    const orderTypeSelect = document.getElementById('editOrderType');
+    if (orderTypeSelect) {
+        sale.orderType = orderTypeSelect.value;
+    }
+    
     // Get payment method from selector
     const paymentSelect = document.getElementById('editPaymentMethod');
     if (paymentSelect) {
@@ -2460,6 +2534,12 @@ function saveEditedSale(saleId) {
         notifications[notificationIndex].message = notifMessage;
         notifications[notificationIndex].orderData = { ...sale };
         saveNotifications();
+    } else {
+        // If notification doesn't exist, create a new one
+        const orderType = sale.orderType || 'Dine In';
+        const itemsList = sale.items.map(item => `${item.name} (${item.quantity}x)`).join(', ');
+        const notifMessage = `✏️ Order ${sale.id} edited! ${orderType} - ${itemsList} - ${sale.paymentMethod || 'Cash'} - ₱${sale.total.toFixed(2)}`;
+        addNotification(notifMessage, sale);
     }
     
     // Save to localStorage
@@ -2473,7 +2553,7 @@ function saveEditedSale(saleId) {
     closeEditSaleModal();
     
     // Show success message with payment method
-    showNotification(`✅ Order #${sale.id} updated! Payment: ${sale.paymentMethod} | Total: ₱${sale.total.toFixed(2)}`);
+    showNotification(`✅ Order ${sale.id} updated successfully! Payment: ${sale.paymentMethod} | Total: ₱${sale.total.toFixed(2)}`);
 }
 
 // Close edit sale modal
@@ -2554,27 +2634,35 @@ function deleteSale(saleId) {
 
 // Confirm delete sale
 function confirmDeleteSale(saleId) {
-    // Convert to number for comparison
-    const saleIdNum = typeof saleId === 'string' ? parseInt(saleId) : saleId;
-    const index = sales.findIndex(s => s.id === saleIdNum);
+    // Find sale by ID (comparing as strings since IDs are "#01", "#02", etc.)
+    const index = sales.findIndex(s => s.id === saleId || s.id === parseInt(saleId));
     
     if (index > -1) {
         const deletedOrder = sales[index];
+        
+        // Create a copy of the order for notification
+        const orderCopy = { ...deletedOrder };
+        
         sales.splice(index, 1);
         
-        // Remove notification for this order
-        const notifIndex = notifications.findIndex(n => n.orderData && n.orderData.id === saleIdNum);
+        // Remove old notification for this order
+        const notifIndex = notifications.findIndex(n => n.orderData && (n.orderData.id === saleId || n.orderData.id === parseInt(saleId)));
         if (notifIndex !== -1) {
             notifications.splice(notifIndex, 1);
             saveNotifications();
         }
+        
+        // Add notification about deletion with order details
+        const itemsList = deletedOrder.items.map(item => `${item.name} (${item.quantity}x)`).join(', ');
+        const deleteMessage = `🗑️ ${deletedOrder.orderType || 'Dine In'} order deleted! Order ${deletedOrder.id} - ${itemsList} - ${deletedOrder.paymentMethod || 'Cash'} - ₱${deletedOrder.total.toFixed(2)}`;
+        addNotification(deleteMessage, orderCopy);
         
         saveSales();
         loadSalesHistory();
         updateDashboard();
         
         closeDeleteModal();
-        showNotification(`✅ Order #${deletedOrder.id} deleted successfully!`);
+        showNotification(`✅ Order ${deletedOrder.id} deleted successfully!`);
     } else {
         closeDeleteModal();
         showNotification(`❌ Order not found!`);
@@ -3065,6 +3153,9 @@ function exportSalesReport() {
 
 // Print sales report
 function printSalesReport() {
+    // Check if running in Capacitor (mobile app)
+    const isCapacitor = window.Capacitor !== undefined;
+    
     // Create print view in same window (APK compatible)
     const now = new Date();
     
@@ -3356,12 +3447,86 @@ function printSalesReport() {
         window.location.reload();
     };
     
-    window.downloadReport = function() {
+    window.downloadReport = async function() {
         try {
-            // Directly trigger print dialog without delay
-            window.print();
+            // Generate PDF directly using html2pdf
+            if (typeof html2pdf !== 'undefined') {
+                const fileName = `Sales_Report_${filterTitle.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+                
+                // Create a temporary container with the report content
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = reportHTMLContent;
+                const reportContainer = tempDiv.querySelector('.report-container');
+                
+                if (reportContainer) {
+                    // PDF options
+                    const opt = {
+                        margin: 10,
+                        filename: fileName,
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: { scale: 2, useCORS: true },
+                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                    };
+                    
+                    // Generate PDF as blob
+                    const pdfBlob = await html2pdf().set(opt).from(reportContainer).outputPdf('blob');
+                    
+                    // Check if running in Capacitor (mobile)
+                    if (window.Capacitor && window.Capacitor.Plugins.Filesystem) {
+                        try {
+                            const { Filesystem } = window.Capacitor.Plugins;
+                            
+                            // Convert blob to base64
+                            const reader = new FileReader();
+                            reader.onloadend = async function() {
+                                const base64Data = reader.result.split(',')[1];
+                                
+                                try {
+                                    // Save to Documents folder
+                                    await Filesystem.writeFile({
+                                        path: fileName,
+                                        data: base64Data,
+                                        directory: 'DOCUMENTS'
+                                    });
+                                    
+                                    alert(`✅ PDF saved successfully!\n\nFile: ${fileName}\nLocation: Documents folder\n\nOpen your File Manager > Documents to view it.`);
+                                } catch (err) {
+                                    console.error('Filesystem error:', err);
+                                    alert('❌ Error saving PDF: ' + err.message);
+                                }
+                            };
+                            reader.readAsDataURL(pdfBlob);
+                        } catch (err) {
+                            console.error('Capacitor error:', err);
+                            // Fallback to browser download
+                            const url = URL.createObjectURL(pdfBlob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = fileName;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                            alert('✅ PDF download started! Check your Downloads folder.');
+                        }
+                    } else {
+                        // Desktop/Browser - Download directly
+                        const url = URL.createObjectURL(pdfBlob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileName;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        alert('✅ PDF download started!');
+                    }
+                } else {
+                    alert('❌ Error: Could not generate PDF');
+                }
+            } else {
+                // Fallback for desktop browsers
+                window.print();
+            }
         } catch(e) {
-            alert('❌ Error: ' + e.message);
+            console.error('PDF Error:', e);
+            alert('❌ Error generating PDF: ' + e.message);
         }
     };
     
