@@ -127,7 +127,7 @@ async function connectToDevice(device) {
                 // Update status display
                 updatePrinterStatus();
                 
-                alert('✅ Connected to PT-210!\n\nReceipts will auto-print after each transaction (2 copies).');
+                alert('✅ Connected to PT-210!\n\nReceipts will auto-print after each transaction (1 copy).');
             },
             function(error) {
                 console.error('Connection error:', error);
@@ -748,8 +748,8 @@ function resetSystem() {
     }
 }
 
-// Export Backup - Download all data as JSON file
-function exportBackup() {
+// Export Backup - Save data as JSON file
+async function exportBackup() {
     const backupData = {
         version: '1.0',
         timestamp: new Date().toISOString(),
@@ -767,21 +767,55 @@ function exportBackup() {
     };
     
     const dataStr = JSON.stringify(backupData, null, 2);
+    const date = new Date();
+    const filename = `MugShots_Backup_${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}.json`;
+
+    // In Capacitor (tablet APK), save directly to Documents for reliable file access.
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
+        try {
+            const { Filesystem } = window.Capacitor.Plugins;
+            const blob = new Blob([dataStr], { type: 'application/json' });
+
+            const base64Data = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const result = reader.result;
+                    if (typeof result === 'string' && result.includes(',')) {
+                        resolve(result.split(',')[1]);
+                    } else {
+                        reject(new Error('Failed to encode backup data'));
+                    }
+                };
+                reader.onerror = () => reject(new Error('Failed to read backup blob'));
+                reader.readAsDataURL(blob);
+            });
+
+            await Filesystem.writeFile({
+                path: filename,
+                data: base64Data,
+                directory: 'DOCUMENTS'
+            });
+
+            showNotification('✅ Backup saved to Documents folder.', 'success');
+            alert(`✅ Backup saved successfully!\n\nFile: ${filename}\nLocation: Documents folder`);
+            return;
+        } catch (error) {
+            console.error('Backup save error:', error);
+            alert('⚠️ Could not save to Documents. Trying download instead.');
+        }
+    }
+
+    // Browser fallback
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    
-    const date = new Date();
-    const filename = `MugShots_Backup_${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}.json`;
     link.download = filename;
-    
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    
+
     showNotification('✅ Backup downloaded! Save it safely.', 'success');
 }
 
@@ -795,7 +829,7 @@ async function importBackup(event) {
         return;
     }
     
-    if (!confirm('⚠️ This will REPLACE all current data with the backup. Continue?')) {
+    if (!confirm('⚠️ This will REPLACE all products and categories with the backup. Sales data will NOT be affected. Continue?')) {
         event.target.value = ''; // Reset file input
         return;
     }
@@ -810,15 +844,10 @@ async function importBackup(event) {
                 throw new Error('Invalid backup file format');
             }
             
-            // Restore data
+            // Restore ONLY products and categories (skip sales, notifications, settings)
             if (backupData.data.products) {
                 products = backupData.data.products;
                 await saveProductsToStorage(products);
-            }
-            
-            if (backupData.data.sales) {
-                sales = backupData.data.sales;
-                localStorage.setItem('mugshotSales', JSON.stringify(sales));
             }
             
             if (backupData.data.categories) {
@@ -826,24 +855,7 @@ async function importBackup(event) {
                 localStorage.setItem('mugshotCategories', JSON.stringify(categories));
             }
             
-            if (backupData.data.notifications) {
-                notifications = backupData.data.notifications;
-                localStorage.setItem('mugshotNotifications', JSON.stringify(notifications));
-            }
-            
-            if (backupData.data.settings) {
-                if (backupData.data.settings.darkMode) {
-                    localStorage.setItem('darkMode', backupData.data.settings.darkMode);
-                }
-                if (backupData.data.settings.orderCounter) {
-                    localStorage.setItem('orderCounter', backupData.data.settings.orderCounter);
-                }
-                if (backupData.data.settings.lastOrderDate) {
-                    localStorage.setItem('lastOrderDate', backupData.data.settings.lastOrderDate);
-                }
-            }
-            
-            alert('✅ Backup restored successfully! Page will reload.');
+            alert('✅ Products restored successfully! Page will reload.');
             window.location.reload();
             
         } catch (error) {
@@ -995,7 +1007,7 @@ function loadProducts() {
         availableProducts.forEach(product => {
             const card = document.createElement('div');
             card.className = 'product-card-new';
-            card.setAttribute('data-category', product.category);
+            card.setAttribute('data-category', (product.category || '').trim());
             
             if (product.inStock === false) {
                 card.classList.add('out-of-stock');
@@ -1085,8 +1097,9 @@ function addToCartNew(productId) {
         
         // Check if product category has add-ons OR specific product name
         const isPancakePlain = product.name === 'Pancake (Plain)';
+        const isFriesProduct = product.name.toLowerCase().includes('fries');
         
-        if (allAddonCategories.includes(product.category) || isPancakePlain) {
+        if (allAddonCategories.includes(product.category) || isPancakePlain || isFriesProduct) {
             console.log('Showing add-ons modal for category:', product.category);
             showAddOnsModal(product);
             return;
@@ -1143,6 +1156,13 @@ const snackAddOns = [
     { id: 'nutella_filling', name: 'Nutella', price: 25, category: 'Add on Filling' },
 ];
 
+// Flavors for fries (no extra cost)
+const friesFlavors = [
+    { id: 'fries_sour_cream', name: 'Sour Cream', price: 0, category: 'Flavor' },
+    { id: 'fries_salt', name: 'Salt', price: 0, category: 'Flavor' },
+    { id: 'fries_cheese', name: 'Cheese', price: 0, category: 'Flavor' },
+];
+
 // Add-ons for Burger
 const burgerAddOns = [
     { id: 'slice_cheese_burger', name: 'Slice Cheese', price: 15, category: 'Extras' },
@@ -1157,6 +1177,7 @@ function showAddOnsModal(product) {
     
     const isMealCategory = mealCategories.includes(product.category);
     const isPancakePlain = product.name === 'Pancake (Plain)';
+    const isFriesProduct = product.name.toLowerCase().includes('fries');
     const isBurgerCategory = burgerCategories.includes(product.category);
     
     let emoji = '🧋'; // Default
@@ -1168,6 +1189,9 @@ function showAddOnsModal(product) {
     } else if (isPancakePlain) {
         emoji = '🥞';
         selectedAddOns = snackAddOns;
+    } else if (isFriesProduct) {
+        emoji = '🍟';
+        selectedAddOns = friesFlavors;
     } else if (isBurgerCategory) {
         emoji = '🍔';
         selectedAddOns = burgerAddOns;
@@ -1175,7 +1199,7 @@ function showAddOnsModal(product) {
     
     let addonsHTML = '';
     
-    if (isMealCategory || isPancakePlain || isBurgerCategory) {
+    if (isMealCategory || isPancakePlain || isFriesProduct || isBurgerCategory) {
         // Show add-ons with sections and quantity
         const sections = {};
         
@@ -1194,7 +1218,7 @@ function showAddOnsModal(product) {
                     <div class="addon-item-with-qty" style="padding: 14px 0; display: flex; justify-content: space-between; align-items: center;">
                         <div class="addon-info" style="display: flex; flex-direction: column; gap: 4px;">
                             <span class="addon-name" style="font-size: 15px; font-weight: 500;">${addon.name}</span>
-                            <span class="addon-price" style="font-size: 14px; color: #d4a574; font-weight: 600;">₱${addon.price.toFixed(2)}</span>
+                            <span class="addon-price" style="font-size: 14px; color: #d4a574; font-weight: 600;">${addon.price > 0 ? `₱${addon.price.toFixed(2)}` : 'No extra cost'}</span>
                         </div>
                         <div class="addon-qty-controls" style="display: flex; align-items: center; gap: 12px;">
                             <button class="qty-btn minus" onclick="changeAddonQty('${addon.id}', -1)" style="width: 42px; height: 42px; font-size: 20px; border-radius: 8px; border: 2px solid #d4a574; background: white; color: #d4a574; cursor: pointer; font-weight: bold;">-</button>
@@ -1298,7 +1322,7 @@ function updateAddonsTotal() {
     const product = products.find(p => {
         const modal = document.querySelector('.addons-header h3');
         if (modal) {
-            const productName = modal.textContent.replace(/^[🧋🍽️🥞🍔]\s+Customize Your /, '');
+            const productName = modal.textContent.replace(/^[🧋🍽️🥞🍔🍟]\s+Customize Your /, '');
             return p.name === productName;
         }
         return false;
@@ -1443,6 +1467,7 @@ function searchProducts() {
 
 // Filter products by category
 function filterCategory(category, event) {
+    const normalizedCategory = (category || '').trim();
     // Prevent default behavior
     if (event) {
         event.preventDefault();
@@ -1454,8 +1479,9 @@ function filterCategory(category, event) {
         // Update active button - only change what's needed
         const buttons = document.querySelectorAll('.category-tab');
         buttons.forEach(btn => {
-            const isTargetButton = (category === 'all' && btn.textContent.trim() === 'All') || 
-                                  btn.textContent.trim() === category;
+            const buttonText = btn.textContent.trim();
+            const isTargetButton = (normalizedCategory === 'all' && buttonText === 'All') || 
+                                  buttonText.toLowerCase() === normalizedCategory.toLowerCase();
             
             if (isTargetButton && !btn.classList.contains('active')) {
                 btn.classList.add('active');
@@ -1467,7 +1493,7 @@ function filterCategory(category, event) {
         // Update section title based on category (keep consistent without emojis)
         const titleElement = document.querySelector('.section-title');
         if (titleElement) {
-            const newTitle = category === 'all' ? 'Menu' : category;
+            const newTitle = normalizedCategory.toLowerCase() === 'all' ? 'Menu' : normalizedCategory;
             if (titleElement.textContent !== newTitle) {
                 titleElement.textContent = newTitle;
             }
@@ -1476,9 +1502,9 @@ function filterCategory(category, event) {
         // Filter products by category (case-insensitive comparison)
         const cards = document.querySelectorAll('.product-card-new');
         cards.forEach(card => {
-            const cardCategory = card.getAttribute('data-category');
-            const shouldShow = (category === 'all' || 
-                              (cardCategory && cardCategory.toLowerCase() === category.toLowerCase()));
+            const cardCategory = (card.getAttribute('data-category') || '').trim();
+            const shouldShow = (normalizedCategory.toLowerCase() === 'all' || 
+                              (cardCategory && cardCategory.toLowerCase() === normalizedCategory.toLowerCase()));
             const currentDisplay = card.style.display;
             const newDisplay = shouldShow ? 'block' : 'none';
             
@@ -1791,23 +1817,10 @@ async function printReceiptThermal(sale) {
                 try {
                     const escposData = createESCPOSReceipt(sale);
                     
-                    // Print first copy
-                    console.log('Sending copy 1...');
-                    const success1 = await sendToPrinter(escposData);
-                    
-                    if (success1) {
-                        console.log('✅ Copy 1 sent to thermal printer');
-                        
-                        // Wait 1 second before printing second copy
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                        
-                        // Print second copy
-                        console.log('Sending copy 2...');
-                        const success2 = await sendToPrinter(escposData);
-                        
-                        if (success2) {
-                            console.log('✅ Copy 2 sent to thermal printer');
-                        }
+                    console.log('Sending receipt...');
+                    const success = await sendToPrinter(escposData);
+                    if (success) {
+                        console.log('✅ Receipt sent to thermal printer');
                     }
                 } catch (error) {
                     console.error('Thermal print error:', error);
@@ -2032,6 +2045,11 @@ function editLastOrder() {
 
 function newOrder() {
     closeReceiptModal();
+    currentViewedSale = null;
+    pendingPaymentMethod = null;
+    editingOrderId = null;
+    cart = [];
+    updateCart();
     showSection('pos');
 }
 
@@ -2732,13 +2750,16 @@ function updateCategoryButtons() {
     categoriesDiv.appendChild(allBtn);
     
     // Get unique categories from actual products
-    const productCategories = [...new Set(products.map(p => p.category).filter(c => c))];
+    const productCategories = [...new Set(products.map(p => (p.category || '').trim()).filter(c => c))];
     
     // Combine all categories (predefined + product-based)
     const allCategoryNames = new Set();
     
     // Add predefined categories
-    categories.forEach(cat => allCategoryNames.add(cat.name));
+    categories.forEach(cat => {
+        const name = (cat.name || '').trim();
+        if (name) allCategoryNames.add(name);
+    });
     
     // Add product categories
     productCategories.forEach(catName => allCategoryNames.add(catName));
@@ -2766,8 +2787,11 @@ function updateCategoryDropdown() {
     datalist.innerHTML = '';
     
     // Get unique categories from products and saved categories
-    const productCategories = [...new Set(products.map(p => p.category).filter(c => c))];
-    const allCategoryNames = [...new Set([...categories.map(c => c.name), ...productCategories])];
+    const productCategories = [...new Set(products.map(p => (p.category || '').trim()).filter(c => c))];
+    const allCategoryNames = [...new Set([
+        ...categories.map(c => (c.name || '').trim()).filter(c => c),
+        ...productCategories
+    ])];
     
     allCategoryNames.forEach(catName => {
         const option = document.createElement('option');
@@ -2860,13 +2884,17 @@ function addNewCategory(event) {
     showNotification(`Category "${name}" added successfully!`, 'success');
 }
 
-function deleteCategory(categoryId) {
+async function deleteCategory(categoryId) {
     const category = categories.find(c => c.id === categoryId);
     
     if (!category) return;
+
+    const normalizedCategoryName = category.name.trim().toLowerCase();
     
     // Check if any products use this category
-    const productsInCategory = products.filter(p => p.category === category.name);
+    const productsInCategory = products.filter(p =>
+        (p.category || '').trim().toLowerCase() === normalizedCategoryName
+    );
     
     if (productsInCategory.length > 0) {
         if (!confirm(`There are ${productsInCategory.length} product(s) in this category. Are you sure you want to delete it? The products will remain but will be uncategorized.`)) {
@@ -2879,6 +2907,27 @@ function deleteCategory(categoryId) {
     }
     
     categories = categories.filter(c => c.id !== categoryId);
+
+    // Keep menu/category filters in sync by removing deleted category from products.
+    if (productsInCategory.length > 0) {
+        products = products.map(product => {
+            if ((product.category || '').trim().toLowerCase() === normalizedCategoryName) {
+                return {
+                    ...product,
+                    category: ''
+                };
+            }
+            return product;
+        });
+
+        try {
+            await saveProductsToStorage(products);
+        } catch (error) {
+            console.error('Error saving updated products after category delete:', error);
+            saveProducts();
+        }
+    }
+
     saveCategories();
     updateCategoryButtons();
     updateCategoryDropdown();

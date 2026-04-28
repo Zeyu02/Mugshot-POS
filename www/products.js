@@ -72,7 +72,7 @@ async function saveProduct(event) {
     event.preventDefault();
     
     const name = document.getElementById('productName').value.trim();
-    const category = document.getElementById('productCategory').value;
+    const categoryInput = document.getElementById('productCategory').value.trim();
     const price = parseFloat(document.getElementById('productPrice').value);
     const description = document.getElementById('productDescription').value.trim();
     const active = document.getElementById('productActive').checked;
@@ -84,9 +84,26 @@ async function saveProduct(event) {
         return;
     }
     
-    if (!category) {
+    if (!categoryInput) {
         showNotification('⚠️ Please select a category', 'warning');
         return;
+    }
+
+    let category = categoryInput;
+
+    // For NEW products only: category must already exist from +Category.
+    if (!currentEditProductId) {
+        const matchedCategory = categories.find(c =>
+            c.name && c.name.trim().toLowerCase() === categoryInput.toLowerCase()
+        );
+
+        if (!matchedCategory) {
+            showNotification('⚠️ Category does not exist. Add it first in +Category.', 'warning');
+            return;
+        }
+
+        // Normalize input to the exact saved category name.
+        category = matchedCategory.name;
     }
     
     if (isNaN(price) || price <= 0) {
@@ -155,15 +172,8 @@ async function saveProduct(event) {
         // Save using new storage system
         await saveProductWithImage(productToSave);
         
-        // If this is a new category, add it to categories array with default icon
-        if (category && !categories.find(c => c.name === category)) {
-            categories.push({
-                id: Date.now(),
-                name: category,
-                icon: '📦' // Default icon for new categories
-            });
-            saveCategories();
-        }
+        // Do not auto-create categories from product add.
+        // Categories must be managed from +Category.
         
         // Wait a moment for the save to complete
         await new Promise(resolve => setTimeout(resolve, 100));
